@@ -120,57 +120,8 @@ volatile uint8_t _g_stepwidth_low;            // step width of low frequency
 volatile uint16_t _g_current_sine_value_high; // position freq. A in LUT (extended format)
 volatile uint16_t _g_current_sine_value_low;  // position freq. B in LUT (extended format)
 
-/*
-The dtmf_init function initializes the settings for generating DTMF tones using the AVR microcontroller’s timer and PWM capabilities. Here’s a detailed breakdown of what happens in this function:
-
-Breakdown of dtmf_init
-Enable Timer Overflow Interrupt:
-TIMSK = _BV(TOIE0); // Int T0 Overflow enabled
-
-This line enables the Timer/Counter0 Overflow Interrupt. The _BV(TOIE0) macro sets the TOIE0 bit in the Timer Interrupt Mask Register (TIMSK), allowing the timer overflow interrupt to occur.
-Configure Timer/Counter0 for PWM:
-TCCR0A = _BV(WGM00) | _BV(WGM01); // 8Bit PWM; Compare/match output mode configured later
-TCCR0B = TIMER_PRESCALE_MASK0 & TIMER_CLK_DIV1;
-
-TCCR0A = _BV(WGM00) | _BV(WGM01);: This sets the Waveform Generation Mode bits (WGM00 and WGM01) in the Timer/Counter Control Register A (TCCR0A) to configure Timer/Counter0 for 8-bit Fast PWM mode.
-TCCR0B = TIMER_PRESCALE_MASK0 & TIMER_CLK_DIV1;: This sets the clock source and prescaler for Timer/Counter0. TIMER_CLK_DIV1 means the timer is clocked at the CPU frequency without any prescaling.
-Initialize Timer/Counter0 and Output Compare Register:
-TCNT0 = 0;
-OCR0A = 0;
-
-TCNT0 = 0;: This initializes the Timer/Counter0 register to 0.
-OCR0A = 0;: This initializes the Output Compare Register A (OCR0A) to 0, which will be used to set the PWM duty cycle.
-Configure PWM Output Pin:
-DDRB |= _BV(PIN_PWM_OUT); // PWM output (OC0A pin)
-
-This sets the data direction of the PWM output pin (OC0A) to output. The _BV(PIN_PWM_OUT) macro sets the corresponding bit in the Data Direction Register B (DDRB).
-Initialize Global Variables:
-_g_stepwidth_high = 0x00;
-_g_stepwidth_low = 0x00;
-
-_g_current_sine_value_high = 0;
-_g_current_sine_value_low = 0;
-
-_g_delay_counter = 0;
-
-_g_stepwidth_high and _g_stepwidth_low: These variables are initialized to 0. They will be used to store the step widths for the high and low frequency components of the DTMF signal.
-_g_current_sine_value_high and _g_current_sine_value_low: These variables are initialized to 0. They will be used to track the current position in the sine wave lookup table for the high and low frequency components.
-_g_delay_counter: This variable is initialized to 0. It will be used as a delay counter for timing purposes.
-Summary
-The dtmf_init function sets up the timer and PWM settings necessary for generating DTMF tones. It configures the timer for 8-bit Fast PWM mode, enables the timer overflow interrupt, initializes the timer and output compare registers, sets the PWM output pin, and initializes several global variables used in the DTMF generation process.
-
-If you have any more questions or need further clarification, feel free to ask!
-*/
-
 void dtmf_init(void)
 {
-    TIMSK = _BV(TOIE0);               // Int T0 Overflow enabled
-    TCCR0A = _BV(WGM00) | _BV(WGM01); // 8Bit PWM; Compare/match output mode configured later
-    TCCR0B = TIMER_PRESCALE_MASK0 & TIMER_CLK_DIV1;
-    TCNT0 = 0;
-    OCR0A = 0;
-    DDRB |= _BV(PIN_PWM_OUT); // PWM output (OC0A pin)
-
     _g_stepwidth_high = 0x00;
     _g_stepwidth_low = 0x00;
 

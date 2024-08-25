@@ -37,8 +37,6 @@
 // PWM frequency = 4Mhz/256 = 15625Hz; overflow cycles per MS = 15
 #define T0_OVERFLOW_PER_MS 15
 
-#define PIN_PWM_OUT PB0 // PB0 (OC0A) as PWM output
-
 // Initialization: The dtmf_init function sets up the timer and PWM settings.
 void dtmf_init(void);
 

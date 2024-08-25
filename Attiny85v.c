@@ -6,7 +6,7 @@ Functions controlling the Atyiny85v
 
 #include "Attiny85v.h"
 
-static void init(void)
+void init()
 {
     // Program clock prescaller to divide + frequency by 1
     // Write CLKPCE 1 and other bits 0
@@ -14,9 +14,6 @@ static void init(void)
 
     // Write prescaler value with CLKPCE = 0
     CLKPR = 0;
-
-    // Enable pull-ups
-    PORTB |= (_BV(PIN_DIAL) | _BV(PIN_PULSE));
 
     // Disable unused modules to save power
     PRR = _BV(PRTIM1) | _BV(PRUSI) | _BV(PRADC);
@@ -31,17 +28,43 @@ static void init(void)
     sei();
 }
 
-static void read_from_eeprom(int8_t *data, int *eeprom_address, uint8 size)
+void set_port_b_pull_up(uint8_t pin)
+{
+    PORTB |= _BV(pin);
+}
+
+void pwm_init(uint8_t pwm_pin)
+{
+    // his line enables the Timer/Counter0 Overflow Interrupt. The _BV(TOIE0) macro sets the TOIE0 bit in the Timer Interrupt Mask Register (TIMSK), allowing the timer overflow interrupt to occur.
+    TIMSK = _BV(TOIE0); // Int T0 Overflow enabled
+
+    // This sets the Waveform Generation Mode bits (WGM00 and WGM01) in the Timer/Counter Control Register A (TCCR0A) to configure Timer/Counter0 for 8-bit Fast PWM mode.
+    TCCR0A = _BV(WGM00) | _BV(WGM01); // 8Bit PWM; Compare/match output mode configured later
+
+    // This sets the clock source and prescaler for Timer/Counter0. TIMER_CLK_DIV1 means the timer is clocked at the CPU frequency without any prescaling.
+    TCCR0B = TIMER_PRESCALE_MASK0 & TIMER_CLK_DIV1;
+
+    // This initializes the Timer/Counter0 register to 0.
+    TCNT0 = 0;
+
+    // This initializes the Output Compare Register A (OCR0A) to 0, which will be used to set the PWM duty cycle.
+    OCR0A = 0;
+
+    // This sets the data direction of the PWM output pin (OC0A) to output. The _BV(PIN_PWM_OUT) macro sets the corresponding bit in the Data Direction Register B (DDRB).
+    DDRB |= _BV(pwm_pin); // PWM output (OC0A pin)
+}
+
+void read_from_eeprom(int8_t *data, int *eeprom_address, uint8 size)
 {
     eeprom_read_block(data, eeprom_address, size);
 }
 
-static void write_to_eeprom(int8_t *data, int *eeprom_address, uint8 size)
+void write_to_eeprom(int8_t *data, int *eeprom_address, uint8 size)
 {
     eeprom_update_block(data, eeprom_address, size);
 }
 
-static void wdt_timer_start(uint8_t delay)
+void wdt_timer_start(uint8_t delay)
 {
     wdt_reset();
     cli();
@@ -62,7 +85,7 @@ static void wdt_timer_start(uint8_t delay)
     sei();
 }
 
-static void wdt_stop(void)
+void wdt_stop(void)
 {
     wdt_reset();
     cli();
@@ -72,7 +95,7 @@ static void wdt_stop(void)
     sei();
 }
 
-static void start_sleep(void)
+void start_sleep(void)
 {
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
     cli(); // stop interrupts to ensure the BOD timed sequence executes as required
@@ -84,14 +107,14 @@ static void start_sleep(void)
 }
 
 // Enable PWM output by configuring compare match mode - non inverting PWM
-static void enable_pwm(void)
+void enable_pwm(void)
 {
     TCCR0A |= _BV(COM0A1);
     TCCR0A &= ~_BV(COM0A0);
 }
 
 // Disable PWM output (compare match mode 0) and force it to 0
-static void disable_pwm(void)
+void disable_pwm(void)
 {
     TCCR0A &= ~_BV(COM0A1);
     TCCR0A &= ~_BV(COM0A0);

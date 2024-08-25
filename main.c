@@ -30,6 +30,7 @@
 #include "Attiny85v.h"
 #include "dtmf.h"
 
+#define PIN_PWM_OUT PB0 // PB0 (OC0A) as PWM output
 #define PIN_DIAL PB1
 #define PIN_PULSE PB2
 
@@ -44,10 +45,6 @@
 #define F_DETECT_SPECIAL_L1 0x01
 #define F_DETECT_SPECIAL_L2 0x02
 #define F_WDT_AWAKE 0x04
-
-#define SLEEP_64MS 0x00
-#define SLEEP_128MS 0x01
-#define SLEEP_2S 0x02
 
 #define SPEED_DIAL_COUNT 8 // 8 Positions in total (Redail(3),4,5,6,7,8,9,0)
 #define SPEED_DIAL_REDIAL (SPEED_DIAL_COUNT - 1)
@@ -94,12 +91,15 @@ int main(void)
     bool dial_pin_prev_state;
 
     init();
+    set_port_b_pull_up(PIN_DIAL);
+    set_port_b_pull_up(PIN_PULSE);
 
     // Wait for the decoupling capacitors to charge
     wdt_timer_start(SLEEP_128MS);
     start_sleep();
     wdt_stop();
 
+    pwm_init(PIN_PWM_OUT);
     dtmf_init();
 
     // Local dial status variables
