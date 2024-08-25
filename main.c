@@ -314,7 +314,7 @@ static void dial_speed_dial_number(int8_t *speed_dial_digits, int8_t index)
 {
     if (index >= 0 && index < SPEED_DIAL_COUNT)
     {
-        eeprom_read_block(speed_dial_digits, &_g_speed_dial_eeprom[index][0], SPEED_DIAL_SIZE);
+        read_from_eeprom(speed_dial_digits, &_g_speed_dial_eeprom[index][0], SPEED_DIAL_SIZE);
 
         for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
         {

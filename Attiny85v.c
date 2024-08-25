@@ -31,14 +31,14 @@ static void init(void)
     sei();
 }
 
-static void read_from_eeprom(int8_t *data, int *data_location, uint8 size)
+static void read_from_eeprom(int8_t *data, int *eeprom_address, uint8 size)
 {
-    eeprom_read_block(data, &data_location, size);
+    eeprom_read_block(data, eeprom_address, size);
 }
 
-static void write_to_eeprom(int8_t *data, int *data_location, uint8 size)
+static void write_to_eeprom(int8_t *data, int *eeprom_address, uint8 size)
 {
-    eeprom_update_block(data, &data_location, size);
+    eeprom_update_block(data, eeprom_address, size);
 }
 
 static void wdt_timer_start(uint8_t delay)
