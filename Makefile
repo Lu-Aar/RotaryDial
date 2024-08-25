@@ -10,7 +10,7 @@
 ##############################################################################
 
 # Fixes clash between windows and coreutils mkdir. Comment out the below line to compile on Linux
-COREUTILS  = C:/Projects/coreutils/bin/
+COREUTILS  = D:/Software/Pulse_To_Tone/coreutils/bin/
 
 DEVICE     = attiny85
 CLOCK      = 4000000

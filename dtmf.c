@@ -25,25 +25,26 @@
 #include <stdint.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
+#include "Attiny85v.h"
 
 #include "dtmf.h"
 
-#define TIMER_CLK_DIV1              0x01    ///< Timer clocked at F_CPU
-#define TIMER_PRESCALE_MASK0        0x07    ///< Timer Prescaler Bit-Mask
-#define NUM_SAMPLES                 128     // Number of samples in lookup table
+#define TIMER_CLK_DIV1 0x01       ///< Timer clocked at F_CPU
+#define TIMER_PRESCALE_MASK0 0x07 ///< Timer Prescaler Bit-Mask
+#define NUM_SAMPLES 128           // Number of samples in lookup table
 
-
-static void dtmf_enable_pwm(void);
+static void enable_pwm(void);
 
 //************************** SIN TABLE *************************************
 // Samples table : one period sampled on 128 samples and
 // quantized on 7 bit
+// auc_sin_param: A lookup table with 128 samples representing one period of a sine wave, quantized to 7 bits.
 //**************************************************************************
 const uint8_t auc_sin_param[NUM_SAMPLES] = {
-    64,  67,  70,  73,
-    76,  79,  82,  85,
-    88,  91,  94,  96,
-    99,  102, 104, 106,
+    64, 67, 70, 73,
+    76, 79, 82, 85,
+    88, 91, 94, 96,
+    99, 102, 104, 106,
     109, 111, 113, 115,
     117, 118, 120, 121,
     123, 124, 125, 126,
@@ -53,30 +54,30 @@ const uint8_t auc_sin_param[NUM_SAMPLES] = {
     123, 121, 120, 118,
     117, 115, 113, 111,
     109, 106, 104, 102,
-    99,  96,  94,  91,
-    88,  85,  82,  79,
-    76,  73,  70,  67,
-    64,  60,  57,  54,
-    51,  48,  45,  42,
-    39,  36,  33,  31,
-    28,  25,  23,  21,
-    18,  16,  14,  12,
-    10,  9,   7,   6,
-    4,   3,   2,   1,
-    1,   0,   0,   0,
-    0,   0,   0,   0,
-    1,   1,   2,   3,
-    4,   6,   7,   9,
-    10,  12,  14,  16,
-    18,  21,  23,  25,
-    28,  31,  33,  36,
-    39,  42,  45,  48,
-    51,  54,  57,  60
-};
+    99, 96, 94, 91,
+    88, 85, 82, 79,
+    76, 73, 70, 67,
+    64, 60, 57, 54,
+    51, 48, 45, 42,
+    39, 36, 33, 31,
+    28, 25, 23, 21,
+    18, 16, 14, 12,
+    10, 9, 7, 6,
+    4, 3, 2, 1,
+    1, 0, 0, 0,
+    0, 0, 0, 0,
+    1, 1, 2, 3,
+    4, 6, 7, 9,
+    10, 12, 14, 16,
+    18, 21, 23, 25,
+    28, 31, 33, 36,
+    39, 42, 45, 48,
+    51, 54, 57, 60};
 
 //***************************  x_SW  ***************************************
 // Fck = Xtal/prescaler
 // Table of x_SW (excess 8): x_SW = ROUND(8 * N_samples * f * 510 / Fck)
+// auc_frequency: A table mapping digits (0-9, *, #) to their corresponding high and low frequencies in DTMF.
 //**************************************************************************
 
 // high frequency
@@ -98,41 +99,83 @@ const uint8_t auc_sin_param[NUM_SAMPLES] = {
 //  941 |   *  |  0   |   #  |   D
 
 const uint8_t auc_frequency[12][2] =
-{
-    { 87, 61 }, // 0
-    { 79, 46 }, // 1
-    { 87, 46 }, // 2
-    { 96, 46 }, // 3
-    { 79, 50 }, // 4
-    { 87, 50 }, // 5
-    { 96, 50 }, // 6
-    { 79, 56 }, // 7
-    { 87, 56 }, // 8
-    { 96, 56 }, // 9
-    { 79, 61 }, // *
-    { 96, 61 }, // #
+    {
+        {87, 61}, // 0
+        {79, 46}, // 1
+        {87, 46}, // 2
+        {96, 46}, // 3
+        {79, 50}, // 4
+        {87, 50}, // 5
+        {96, 50}, // 6
+        {79, 56}, // 7
+        {87, 56}, // 8
+        {96, 56}, // 9
+        {79, 61}, // *
+        {96, 61}, // #
 };
 
-volatile uint32_t _g_delay_counter;         // Delay counter for sleep function
-volatile uint8_t _g_stepwidth_a;                // step width of high frequency
-volatile uint8_t _g_stepwidth_b;                // step width of low frequency
-volatile uint16_t _g_cur_sin_val_a;             // position freq. A in LUT (extended format)
-volatile uint16_t _g_cur_sin_val_b;             // position freq. B in LUT (extended format)
+volatile uint32_t _g_delay_counter;           // Delay counter for sleep function
+volatile uint8_t _g_stepwidth_high;           // step width of high frequency
+volatile uint8_t _g_stepwidth_low;            // step width of low frequency
+volatile uint16_t _g_current_sine_value_high; // position freq. A in LUT (extended format)
+volatile uint16_t _g_current_sine_value_low;  // position freq. B in LUT (extended format)
+
+/*
+The dtmf_init function initializes the settings for generating DTMF tones using the AVR microcontroller’s timer and PWM capabilities. Here’s a detailed breakdown of what happens in this function:
+
+Breakdown of dtmf_init
+Enable Timer Overflow Interrupt:
+TIMSK = _BV(TOIE0); // Int T0 Overflow enabled
+
+This line enables the Timer/Counter0 Overflow Interrupt. The _BV(TOIE0) macro sets the TOIE0 bit in the Timer Interrupt Mask Register (TIMSK), allowing the timer overflow interrupt to occur.
+Configure Timer/Counter0 for PWM:
+TCCR0A = _BV(WGM00) | _BV(WGM01); // 8Bit PWM; Compare/match output mode configured later
+TCCR0B = TIMER_PRESCALE_MASK0 & TIMER_CLK_DIV1;
+
+TCCR0A = _BV(WGM00) | _BV(WGM01);: This sets the Waveform Generation Mode bits (WGM00 and WGM01) in the Timer/Counter Control Register A (TCCR0A) to configure Timer/Counter0 for 8-bit Fast PWM mode.
+TCCR0B = TIMER_PRESCALE_MASK0 & TIMER_CLK_DIV1;: This sets the clock source and prescaler for Timer/Counter0. TIMER_CLK_DIV1 means the timer is clocked at the CPU frequency without any prescaling.
+Initialize Timer/Counter0 and Output Compare Register:
+TCNT0 = 0;
+OCR0A = 0;
+
+TCNT0 = 0;: This initializes the Timer/Counter0 register to 0.
+OCR0A = 0;: This initializes the Output Compare Register A (OCR0A) to 0, which will be used to set the PWM duty cycle.
+Configure PWM Output Pin:
+DDRB |= _BV(PIN_PWM_OUT); // PWM output (OC0A pin)
+
+This sets the data direction of the PWM output pin (OC0A) to output. The _BV(PIN_PWM_OUT) macro sets the corresponding bit in the Data Direction Register B (DDRB).
+Initialize Global Variables:
+_g_stepwidth_high = 0x00;
+_g_stepwidth_low = 0x00;
+
+_g_current_sine_value_high = 0;
+_g_current_sine_value_low = 0;
+
+_g_delay_counter = 0;
+
+_g_stepwidth_high and _g_stepwidth_low: These variables are initialized to 0. They will be used to store the step widths for the high and low frequency components of the DTMF signal.
+_g_current_sine_value_high and _g_current_sine_value_low: These variables are initialized to 0. They will be used to track the current position in the sine wave lookup table for the high and low frequency components.
+_g_delay_counter: This variable is initialized to 0. It will be used as a delay counter for timing purposes.
+Summary
+The dtmf_init function sets up the timer and PWM settings necessary for generating DTMF tones. It configures the timer for 8-bit Fast PWM mode, enables the timer overflow interrupt, initializes the timer and output compare registers, sets the PWM output pin, and initializes several global variables used in the DTMF generation process.
+
+If you have any more questions or need further clarification, feel free to ask!
+*/
 
 void dtmf_init(void)
 {
-    TIMSK = _BV(TOIE0);                 // Int T0 Overflow enabled
-    TCCR0A = _BV(WGM00) | _BV(WGM01);   // 8Bit PWM; Compare/match output mode configured later
+    TIMSK = _BV(TOIE0);               // Int T0 Overflow enabled
+    TCCR0A = _BV(WGM00) | _BV(WGM01); // 8Bit PWM; Compare/match output mode configured later
     TCCR0B = TIMER_PRESCALE_MASK0 & TIMER_CLK_DIV1;
     TCNT0 = 0;
     OCR0A = 0;
-    DDRB |= _BV(PIN_PWM_OUT);    // PWM output (OC0A pin)
+    DDRB |= _BV(PIN_PWM_OUT); // PWM output (OC0A pin)
 
-    _g_stepwidth_a = 0x00;
-    _g_stepwidth_b = 0x00;
+    _g_stepwidth_high = 0x00;
+    _g_stepwidth_low = 0x00;
 
-    _g_cur_sin_val_a = 0;
-    _g_cur_sin_val_b = 0;
+    _g_current_sine_value_high = 0;
+    _g_current_sine_value_low = 0;
 
     _g_delay_counter = 0;
 }
@@ -140,24 +183,25 @@ void dtmf_init(void)
 // Generate DTMF tone, duration x ms
 void dtmf_generate_tone(int8_t digit, uint16_t duration_ms)
 {
-    GIMSK = 0; 
+    // Disable interrupt
+    GIMSK = 0;
 
     if (digit >= 0 && digit <= DIGIT_POUND)
     {
         // Standard digits 0-9, *, #
-        _g_stepwidth_a = auc_frequency[digit][0];  
-        _g_stepwidth_b = auc_frequency[digit][1]; 
-        dtmf_enable_pwm();
+        _g_stepwidth_high = auc_frequency[digit][0];
+        _g_stepwidth_low = auc_frequency[digit][1];
+        enable_pwm();
 
         // Wait x ms
         sleep_ms(duration_ms);
-    } 
+    }
     else if (digit == DIGIT_BEEP)
     {
         // Beep ~1000Hz (66)
-        _g_stepwidth_a = 66;  
-        _g_stepwidth_b = 0;
-        dtmf_enable_pwm();
+        _g_stepwidth_high = 66;
+        _g_stepwidth_low = 0;
+        enable_pwm();
 
         // Wait x ms
         sleep_ms(duration_ms);
@@ -165,97 +209,76 @@ void dtmf_generate_tone(int8_t digit, uint16_t duration_ms)
     else if (digit == DIGIT_BEEP_LOW)
     {
         // Beep ~500Hz (33)
-        _g_stepwidth_a = 33;  
-        _g_stepwidth_b = 0;
-        dtmf_enable_pwm();
+        _g_stepwidth_high = 33;
+        _g_stepwidth_low = 0;
+        enable_pwm();
 
         // Wait x ms
         sleep_ms(duration_ms);
     }
     else if (digit == DIGIT_TUNE_ASC)
     {
-        _g_stepwidth_a = 34;    // C=523.25Hz  
-        _g_stepwidth_b = 0;
-        dtmf_enable_pwm();
-        
+        _g_stepwidth_high = 34; // C=523.25Hz
+        _g_stepwidth_low = 0;
+        enable_pwm();
+
         sleep_ms(duration_ms / 3);
-        _g_stepwidth_a = 43;    // E=659.26Hz
+        _g_stepwidth_high = 43; // E=659.26Hz
         sleep_ms(duration_ms / 3);
-        _g_stepwidth_a = 51;    // G=784Hz
+        _g_stepwidth_high = 51; // G=784Hz
         sleep_ms(duration_ms / 3);
     }
     else if (digit == DIGIT_TUNE_DESC)
     {
-        _g_stepwidth_a = 51;    // G=784Hz
-        _g_stepwidth_b = 0;
-        dtmf_enable_pwm();
+        _g_stepwidth_high = 51; // G=784Hz
+        _g_stepwidth_low = 0;
+        enable_pwm();
 
         sleep_ms(duration_ms / 3);
-        _g_stepwidth_a = 43;    // E=659.26Hz
+        _g_stepwidth_high = 43; // E=659.26Hz
         sleep_ms(duration_ms / 3);
-        _g_stepwidth_a = 34;    // C=523.25Hz  
+        _g_stepwidth_high = 34; // C=523.25Hz
         sleep_ms(duration_ms / 3);
     }
 
     // Stop DTMF transmitting
-    // Disable PWM output (compare match mode 0) and force it to 0
-    TCCR0A &= ~_BV(COM0A1);
-    TCCR0A &= ~_BV(COM0A0);
-    PORTB &= ~_BV(PIN_PWM_OUT);
-    
-    _g_stepwidth_a = 0;
-    _g_stepwidth_b = 0;
+    disable_pwm();
+    _g_stepwidth_high = 0;
+    _g_stepwidth_low = 0;
 
-    GIMSK = _BV(INT0) | _BV(PCIE); 
-}
-
-// Enable PWM output by configuring compare match mode - non inverting PWM
-static void dtmf_enable_pwm(void)
-{
-    TCCR0A |= _BV(COM0A1);
-    TCCR0A &= ~_BV(COM0A0);
+    // Set interrupt 0 and pin change interrupt
+    GIMSK = _BV(INT0) | _BV(PCIE);
 }
 
 // Timer overflow interrupt service routine
 ISR(TIMER0_OVF_vect)
-{ 
-    uint8_t sin_a;
-    uint8_t sin_b;
+{
+    uint8_t sine_high;
+    uint8_t sine_low;
 
     // A component (high frequency) is always used
     // move Pointer about step width ahead
-    _g_cur_sin_val_a += _g_stepwidth_a;      
-    // normalize Temp-Pointer 
-    uint16_t tmp_sin_val_a = (int8_t)(((_g_cur_sin_val_a + 4) >> 3) & (0x007F)); 
-    sin_a = auc_sin_param[tmp_sin_val_a];
+    _g_current_sine_value_high += _g_stepwidth_high;
+    // normalize Temp-Pointer
+    uint16_t temp_sine_value_high = (int8_t)(((_g_current_sine_value_high + 4) >> 3) & (0x007F));
+    sine_high = auc_sin_param[temp_sine_value_high];
 
     // B component (low frequency) is optional
-    if (_g_stepwidth_b > 0)
+    if (_g_stepwidth_low > 0)
     {
         // move Pointer about step width ahead
-        _g_cur_sin_val_b += _g_stepwidth_b;    
+        _g_current_sine_value_low += _g_stepwidth_low;
 
-        // normalize Temp-Pointer    
-        uint16_t tmp_sin_val_b = (int8_t)(((_g_cur_sin_val_b + 4) >> 3) & (0x007F));        
-        sin_b = auc_sin_param[tmp_sin_val_b];
+        // normalize Temp-Pointer
+        uint16_t temp_sine_value_low = (int8_t)(((_g_current_sine_value_low + 4) >> 3) & (0x007F));
+        sine_low = auc_sin_param[temp_sine_value_low];
     }
     else
     {
-        sin_b = 0;
+        sine_low = 0;
     }
 
     // calculate PWM value: high frequency value + 3/4 low frequency value
-    OCR0A = (sin_a + (sin_b - (sin_b >> 2)));
+    OCR0A = (sine_high + (sine_low - (sine_low >> 2)));
     _g_delay_counter++;
-}
-
-// Wait x ms
-void sleep_ms(uint16_t msec)
-{    
-    _g_delay_counter = 0;
-    set_sleep_mode(SLEEP_MODE_IDLE);        
-    while(_g_delay_counter <= msec * T0_OVERFLOW_PER_MS)
-    {
-        sleep_mode();
-    }
 }

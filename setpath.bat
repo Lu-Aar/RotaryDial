@@ -1,1 +1,1 @@
-SET PATH=%PATH%;C:\Projects\avr-gcc\bin;C:\Projects\coreutils\bin
+SET PATH=%PATH%;D:\Software\Pulse_To_Tone\avr-gcc\bin;D:\Software\Pulse_To_Tone\coreutils\bin
