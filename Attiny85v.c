@@ -16,7 +16,7 @@ void init()
     CLKPR = 0;
 
     // Disable unused modules to save power
-    PRR = _BV(PRTIM1) | _BV(PRUSI) | _BV(PRADC);
+    PRR  = _BV(PRTIM1) | _BV(PRUSI) | _BV(PRADC);
     ACSR = _BV(ACD);
 
     // Configure pin change interrupt
@@ -54,12 +54,12 @@ void pwm_init(uint8_t pwm_pin)
     DDRB |= _BV(pwm_pin); // PWM output (OC0A pin)
 }
 
-void read_from_eeprom(int8_t *data, int *eeprom_address, uint8 size)
+void read_from_eeprom(int8_t* data, int* eeprom_address, uint8 size)
 {
     eeprom_read_block(data, eeprom_address, size);
 }
 
-void write_to_eeprom(int8_t *data, int *eeprom_address, uint8 size)
+void write_to_eeprom(int8_t* data, int* eeprom_address, uint8 size)
 {
     eeprom_update_block(data, eeprom_address, size);
 }
@@ -72,15 +72,15 @@ void wdt_timer_start(uint8_t delay)
     WDTCR |= _BV(WDCE) | _BV(WDE);
     switch (delay)
     {
-    case SLEEP_64MS:
-        WDTCR = _BV(WDIE) | _BV(WDP1);
-        break;
-    case SLEEP_128MS:
-        WDTCR = _BV(WDIE) | _BV(WDP1) | _BV(WDP0);
-        break;
-    case SLEEP_2S:
-        WDTCR = _BV(WDIE) | _BV(WDP0) | _BV(WDP1) | _BV(WDP2); // 2048ms
-        break;
+        case SLEEP_64MS:
+            WDTCR = _BV(WDIE) | _BV(WDP1);
+            break;
+        case SLEEP_128MS:
+            WDTCR = _BV(WDIE) | _BV(WDP1) | _BV(WDP0);
+            break;
+        case SLEEP_2S:
+            WDTCR = _BV(WDIE) | _BV(WDP0) | _BV(WDP1) | _BV(WDP2); // 2048ms
+            break;
     }
     sei();
 }
@@ -130,4 +130,18 @@ void sleep_ms(uint16_t msec)
     {
         sleep_mode();
     }
+}
+
+void enable_interrupt_0(void)
+{
+    GIMSK |= _bv(INT0);
+}
+void enable_pin_change_interrupt(void)
+{
+    GIMSK |= _bv(PCIE);
+}
+
+void disable_interrupts(void)
+{
+    GIMSK = 0;
 }

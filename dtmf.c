@@ -29,9 +29,9 @@
 
 #include "dtmf.h"
 
-#define TIMER_CLK_DIV1 0x01       ///< Timer clocked at F_CPU
+#define TIMER_CLK_DIV1       0x01 ///< Timer clocked at F_CPU
 #define TIMER_PRESCALE_MASK0 0x07 ///< Timer Prescaler Bit-Mask
-#define NUM_SAMPLES 128           // Number of samples in lookup table
+#define NUM_SAMPLES          128  // Number of samples in lookup table
 
 static void enable_pwm(void);
 
@@ -40,39 +40,8 @@ static void enable_pwm(void);
 // quantized on 7 bit
 // auc_sin_param: A lookup table with 128 samples representing one period of a sine wave, quantized to 7 bits.
 //**************************************************************************
-const uint8_t auc_sin_param[NUM_SAMPLES] = {
-    64, 67, 70, 73,
-    76, 79, 82, 85,
-    88, 91, 94, 96,
-    99, 102, 104, 106,
-    109, 111, 113, 115,
-    117, 118, 120, 121,
-    123, 124, 125, 126,
-    126, 127, 127, 127,
-    127, 127, 127, 127,
-    126, 126, 125, 124,
-    123, 121, 120, 118,
-    117, 115, 113, 111,
-    109, 106, 104, 102,
-    99, 96, 94, 91,
-    88, 85, 82, 79,
-    76, 73, 70, 67,
-    64, 60, 57, 54,
-    51, 48, 45, 42,
-    39, 36, 33, 31,
-    28, 25, 23, 21,
-    18, 16, 14, 12,
-    10, 9, 7, 6,
-    4, 3, 2, 1,
-    1, 0, 0, 0,
-    0, 0, 0, 0,
-    1, 1, 2, 3,
-    4, 6, 7, 9,
-    10, 12, 14, 16,
-    18, 21, 23, 25,
-    28, 31, 33, 36,
-    39, 42, 45, 48,
-    51, 54, 57, 60};
+const uint8_t auc_sin_param[NUM_SAMPLES] = { 64, 67, 70, 73, 76, 79, 82, 85, 88, 91, 94, 96, 99, 102, 104, 106, 109, 111, 113, 115, 117, 118, 120, 121, 123, 124, 125, 126, 126, 127, 127, 127, 127, 127, 127, 127, 126, 126, 125, 124, 123, 121, 120, 118, 117, 115, 113, 111, 109, 106, 104, 102, 99, 96, 94, 91, 88, 85, 82, 79, 76, 73, 70, 67,
+                                             64, 60, 57, 54, 51, 48, 45, 42, 39, 36, 33, 31, 28, 25,  23,  21,  18,  16,  14,  12,  10,  9,   7,   6,   4,   3,   2,   1,   1,   0,   0,   0,   0,   0,   0,   0,   1,   1,   2,   3,   4,   6,   7,   9,   10,  12,  14,  16,  18,  21,  23,  25,  28, 31, 33, 36, 39, 42, 45, 48, 51, 54, 57, 60 };
 
 //***************************  x_SW  ***************************************
 // Fck = Xtal/prescaler
@@ -98,35 +67,34 @@ const uint8_t auc_sin_param[NUM_SAMPLES] = {
 //  852 |   7  |  8   |   9  |   C
 //  941 |   *  |  0   |   #  |   D
 
-const uint8_t auc_frequency[12][2] =
-    {
-        {87, 61}, // 0
-        {79, 46}, // 1
-        {87, 46}, // 2
-        {96, 46}, // 3
-        {79, 50}, // 4
-        {87, 50}, // 5
-        {96, 50}, // 6
-        {79, 56}, // 7
-        {87, 56}, // 8
-        {96, 56}, // 9
-        {79, 61}, // *
-        {96, 61}, // #
+const uint8_t auc_frequency[12][2] = {
+    { 87, 61 }, // 0
+    { 79, 46 }, // 1
+    { 87, 46 }, // 2
+    { 96, 46 }, // 3
+    { 79, 50 }, // 4
+    { 87, 50 }, // 5
+    { 96, 50 }, // 6
+    { 79, 56 }, // 7
+    { 87, 56 }, // 8
+    { 96, 56 }, // 9
+    { 79, 61 }, // *
+    { 96, 61 }, // #
 };
 
 volatile uint32_t _g_delay_counter;           // Delay counter for sleep function
-volatile uint8_t _g_stepwidth_high;           // step width of high frequency
-volatile uint8_t _g_stepwidth_low;            // step width of low frequency
+volatile uint8_t  _g_stepwidth_high;          // step width of high frequency
+volatile uint8_t  _g_stepwidth_low;           // step width of low frequency
 volatile uint16_t _g_current_sine_value_high; // position freq. A in LUT (extended format)
 volatile uint16_t _g_current_sine_value_low;  // position freq. B in LUT (extended format)
 
 void dtmf_init(void)
 {
     _g_stepwidth_high = 0x00;
-    _g_stepwidth_low = 0x00;
+    _g_stepwidth_low  = 0x00;
 
     _g_current_sine_value_high = 0;
-    _g_current_sine_value_low = 0;
+    _g_current_sine_value_low  = 0;
 
     _g_delay_counter = 0;
 }
@@ -134,71 +102,79 @@ void dtmf_init(void)
 // Generate DTMF tone, duration x ms
 void dtmf_generate_tone(int8_t digit, uint16_t duration_ms)
 {
-    // Disable interrupt
-    GIMSK = 0;
+    disable_interrupts();
 
-    if (digit >= 0 && digit <= DIGIT_POUND)
+    switch (digit)
     {
-        // Standard digits 0-9, *, #
-        _g_stepwidth_high = auc_frequency[digit][0];
-        _g_stepwidth_low = auc_frequency[digit][1];
-        enable_pwm();
+        case 0 ... DIGIT_POUND:
+        {
+            // Standard digits 0-9, *, #
+            _g_stepwidth_high = auc_frequency[digit][0];
+            _g_stepwidth_low  = auc_frequency[digit][1];
+            enable_pwm();
+            sleep_ms(duration_ms);
+            break;
+        }
 
-        // Wait x ms
-        sleep_ms(duration_ms);
-    }
-    else if (digit == DIGIT_BEEP)
-    {
-        // Beep ~1000Hz (66)
-        _g_stepwidth_high = 66;
-        _g_stepwidth_low = 0;
-        enable_pwm();
+        case DIGIT_BEEP:
+        {
+            // Beep ~1000Hz (66)
+            _g_stepwidth_high = 66;
+            _g_stepwidth_low  = 0;
+            enable_pwm();
+            sleep_ms(duration_ms);
+            break;
+        }
 
-        // Wait x ms
-        sleep_ms(duration_ms);
-    }
-    else if (digit == DIGIT_BEEP_LOW)
-    {
-        // Beep ~500Hz (33)
-        _g_stepwidth_high = 33;
-        _g_stepwidth_low = 0;
-        enable_pwm();
+        case DIGIT_BEEP_LOW:
+        {
+            // Beep ~500Hz (33)
+            _g_stepwidth_high = 33;
+            _g_stepwidth_low  = 0;
+            enable_pwm();
+            sleep_ms(duration_ms);
+            break;
+        }
 
-        // Wait x ms
-        sleep_ms(duration_ms);
-    }
-    else if (digit == DIGIT_TUNE_ASC)
-    {
-        _g_stepwidth_high = 34; // C=523.25Hz
-        _g_stepwidth_low = 0;
-        enable_pwm();
+        case DIGIT_TUNE_ASC:
+        {
+            _g_stepwidth_high = 34; // C=523.25Hz
+            _g_stepwidth_low  = 0;
+            enable_pwm();
+            sleep_ms(duration_ms / 3);
+            _g_stepwidth_high = 43; // E=659.26Hz
+            sleep_ms(duration_ms / 3);
+            _g_stepwidth_high = 51; // G=784Hz
+            sleep_ms(duration_ms / 3);
+            break;
+        }
 
-        sleep_ms(duration_ms / 3);
-        _g_stepwidth_high = 43; // E=659.26Hz
-        sleep_ms(duration_ms / 3);
-        _g_stepwidth_high = 51; // G=784Hz
-        sleep_ms(duration_ms / 3);
-    }
-    else if (digit == DIGIT_TUNE_DESC)
-    {
-        _g_stepwidth_high = 51; // G=784Hz
-        _g_stepwidth_low = 0;
-        enable_pwm();
+        case DIGIT_TUNE_DESC:
+        {
+            _g_stepwidth_high = 51; // G=784Hz
+            _g_stepwidth_low  = 0;
+            enable_pwm();
+            sleep_ms(duration_ms / 3);
+            _g_stepwidth_high = 43; // E=659.26Hz
+            sleep_ms(duration_ms / 3);
+            _g_stepwidth_high = 34; // C=523.25Hz
+            sleep_ms(duration_ms / 3);
+            break;
+        }
 
-        sleep_ms(duration_ms / 3);
-        _g_stepwidth_high = 43; // E=659.26Hz
-        sleep_ms(duration_ms / 3);
-        _g_stepwidth_high = 34; // C=523.25Hz
-        sleep_ms(duration_ms / 3);
+        default:
+            // Handle unexpected values if necessary
+            break;
     }
 
     // Stop DTMF transmitting
     disable_pwm();
     _g_stepwidth_high = 0;
-    _g_stepwidth_low = 0;
+    _g_stepwidth_low  = 0;
 
     // Set interrupt 0 and pin change interrupt
-    GIMSK = _BV(INT0) | _BV(PCIE);
+    enable_interrupt_0();
+    enable_pin_change_interrupt();
 }
 
 // Timer overflow interrupt service routine
@@ -212,7 +188,7 @@ ISR(TIMER0_OVF_vect)
     _g_current_sine_value_high += _g_stepwidth_high;
     // normalize Temp-Pointer
     uint16_t temp_sine_value_high = (int8_t)(((_g_current_sine_value_high + 4) >> 3) & (0x007F));
-    sine_high = auc_sin_param[temp_sine_value_high];
+    sine_high                     = auc_sin_param[temp_sine_value_high];
 
     // B component (low frequency) is optional
     if (_g_stepwidth_low > 0)
@@ -222,7 +198,7 @@ ISR(TIMER0_OVF_vect)
 
         // normalize Temp-Pointer
         uint16_t temp_sine_value_low = (int8_t)(((_g_current_sine_value_low + 4) >> 3) & (0x007F));
-        sine_low = auc_sin_param[temp_sine_value_low];
+        sine_low                     = auc_sin_param[temp_sine_value_low];
     }
     else
     {

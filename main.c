@@ -31,64 +31,53 @@
 #include "dtmf.h"
 
 #define PIN_PWM_OUT PB0 // PB0 (OC0A) as PWM output
-#define PIN_DIAL PB1
-#define PIN_PULSE PB2
+#define PIN_DIAL    PB1
+#define PIN_PULSE   PB2
 
 #define SPEED_DIAL_SIZE 32
 
-#define STATE_DIAL 0x00
+#define STATE_DIAL       0x00
 #define STATE_SPECIAL_L1 0x01
 #define STATE_SPECIAL_L2 0x02
 #define STATE_PROGRAM_SD 0x03
 
-#define F_NONE 0x00
+#define F_NONE              0x00
 #define F_DETECT_SPECIAL_L1 0x01
 #define F_DETECT_SPECIAL_L2 0x02
-#define F_WDT_AWAKE 0x04
+#define F_WDT_AWAKE         0x04
 
-#define SPEED_DIAL_COUNT 8 // 8 Positions in total (Redail(3),4,5,6,7,8,9,0)
+#define SPEED_DIAL_COUNT  8 // 8 Positions in total (Redail(3),4,5,6,7,8,9,0)
 #define SPEED_DIAL_REDIAL (SPEED_DIAL_COUNT - 1)
 
-#define L2_STAR 1
-#define L2_POUND 2
+#define L2_STAR   1
+#define L2_POUND  2
 #define L2_REDIAL 3
 
 typedef struct
 {
     uint8_t state;
     uint8_t flags;
-    bool dial_pin_state;
+    bool    dial_pin_state;
     uint8_t speed_dial_index;
     uint8_t speed_dial_digit_index;
-    int8_t speed_dial_digits[SPEED_DIAL_SIZE];
-    int8_t dialed_digit;
+    int8_t  speed_dial_digits[SPEED_DIAL_SIZE];
+    int8_t  dialed_digit;
 } runstate_t;
 
-static void process_dialed_digit(runstate_t *rs);
-static void dial_speed_dial_number(int8_t *speed_dial_digits, int8_t index);
-static void write_current_speed_dial(int8_t *speed_dial_digits, int8_t index);
+static void process_dialed_digit(runstate_t* rs);
+static void dial_speed_dial_number(int8_t* speed_dial_digits, int8_t index);
+static void write_current_speed_dial(int8_t* speed_dial_digits, int8_t index);
 
 // Map speed dial numbers to memory locations
-const int8_t _g_speed_dial_loc[] =
-    {
-        0,
-        -1 /* 1 - * */,
-        -1 /* 2 - # */,
-        -1 /* 3 - Redial */,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6};
+const int8_t _g_speed_dial_loc[] = { 0, -1 /* 1 - * */, -1 /* 2 - # */, -1 /* 3 - Redial */, 1, 2, 3, 4, 5, 6 };
 
-int8_t EEMEM _g_speed_dial_eeprom[SPEED_DIAL_COUNT][SPEED_DIAL_SIZE] = {[0 ...(SPEED_DIAL_COUNT - 1)][0 ... SPEED_DIAL_SIZE - 1] = DIGIT_OFF};
-runstate_t _g_run_state;
+int8_t EEMEM _g_speed_dial_eeprom[SPEED_DIAL_COUNT][SPEED_DIAL_SIZE] = { [0 ...(SPEED_DIAL_COUNT - 1)][0 ... SPEED_DIAL_SIZE - 1] = DIGIT_OFF };
+runstate_t   _g_run_state;
 
 int main(void)
 {
-    runstate_t *rs = &_g_run_state;
-    bool dial_pin_prev_state;
+    runstate_t* rs = &_g_run_state;
+    bool        dial_pin_prev_state;
 
     init();
     set_port_b_pull_up(PIN_DIAL);
@@ -103,12 +92,12 @@ int main(void)
     dtmf_init();
 
     // Local dial status variables
-    rs->state = STATE_DIAL;
-    rs->dial_pin_state = true;
-    rs->flags = F_NONE;
+    rs->state                  = STATE_DIAL;
+    rs->dial_pin_state         = true;
+    rs->flags                  = F_NONE;
     rs->speed_dial_digit_index = 0;
-    rs->speed_dial_index = 0;
-    dial_pin_prev_state = true;
+    rs->speed_dial_index       = 0;
+    dial_pin_prev_state        = true;
 
     for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
         rs->speed_dial_digits[i] = DIGIT_OFF;
@@ -151,8 +140,7 @@ int main(void)
                     // NZPO Phones only. 0 is same as GPO but 1-9 are reversed.
                     rs->dialed_digit = (10 - rs->dialed_digit);
 #else
-                    if (rs->dialed_digit == 10)
-                        rs->dialed_digit = 0; // 10 pulses => 0
+                    if (rs->dialed_digit == 10) rs->dialed_digit = 0; // 10 pulses => 0
 #endif
                     wdt_timer_start(SLEEP_128MS);
                     start_sleep();
@@ -168,8 +156,8 @@ int main(void)
             {
                 // Rotary dial at the rest position
                 // Reset all variables
-                rs->state = STATE_DIAL;
-                rs->flags = F_NONE;
+                rs->state        = STATE_DIAL;
+                rs->flags        = F_NONE;
                 rs->dialed_digit = DIGIT_OFF;
             }
         }
@@ -224,7 +212,7 @@ int main(void)
     return 0;
 }
 
-static void process_dialed_digit(runstate_t *rs)
+static void process_dialed_digit(runstate_t* rs)
 {
     if (rs->state == STATE_DIAL)
     {
@@ -270,7 +258,7 @@ static void process_dialed_digit(runstate_t *rs)
     {
         if (_g_speed_dial_loc[rs->dialed_digit] >= 0)
         {
-            rs->speed_dial_index = _g_speed_dial_loc[rs->dialed_digit];
+            rs->speed_dial_index       = _g_speed_dial_loc[rs->dialed_digit];
             rs->speed_dial_digit_index = 0;
 
             for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
@@ -310,7 +298,7 @@ static void process_dialed_digit(runstate_t *rs)
 }
 
 // Dial speed dial number (it erases current SD number in the global structure)
-static void dial_speed_dial_number(int8_t *speed_dial_digits, int8_t index)
+static void dial_speed_dial_number(int8_t* speed_dial_digits, int8_t index)
 {
     if (index >= 0 && index < SPEED_DIAL_COUNT)
     {
@@ -330,7 +318,7 @@ static void dial_speed_dial_number(int8_t *speed_dial_digits, int8_t index)
     }
 }
 
-static void write_current_speed_dial(int8_t *speed_dial_digits, int8_t index)
+static void write_current_speed_dial(int8_t* speed_dial_digits, int8_t index)
 {
     if (index >= 0 && index < SPEED_DIAL_COUNT)
     {
@@ -352,9 +340,7 @@ ISR(INT0_vect)
 }
 
 // Interrupt initiated by pin change on any enabled pin
-ISR(PCINT0_vect)
-{
-}
+ISR(PCINT0_vect) {}
 
 // Handler for any unspecified 'bad' interrupts
 ISR(BADISR_vect)

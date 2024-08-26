@@ -24,13 +24,13 @@
 #ifndef __DTMF_H__
 #define __DTMF_H__
 
-#define DIGIT_BEEP -10
-#define DIGIT_BEEP_LOW -13
-#define DIGIT_TUNE_ASC -11
+#define DIGIT_BEEP      -10
+#define DIGIT_BEEP_LOW  -13
+#define DIGIT_TUNE_ASC  -11
 #define DIGIT_TUNE_DESC -12
-#define DIGIT_OFF -1
-#define DIGIT_STAR 10
-#define DIGIT_POUND 11
+#define DIGIT_OFF       -1
+#define DIGIT_STAR      10
+#define DIGIT_POUND     11
 
 #define DTMF_DURATION_MS 100
 
