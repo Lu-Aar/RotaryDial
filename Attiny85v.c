@@ -54,6 +54,11 @@ void pwm_init(uint8_t pwm_pin)
     DDRB |= _BV(pwm_pin); // PWM output (OC0A pin)
 }
 
+void set_pwm_duty_cycle(uint8_t duty_cycle)
+{
+    OCR0A = duty_cycle;
+}
+
 void read_from_eeprom(int8_t* data, int* eeprom_address, uint8 size)
 {
     eeprom_read_block(data, eeprom_address, size);
@@ -79,7 +84,7 @@ void wdt_timer_start(uint8_t delay)
             WDTCR = _BV(WDIE) | _BV(WDP1) | _BV(WDP0);
             break;
         case SLEEP_2S:
-            WDTCR = _BV(WDIE) | _BV(WDP0) | _BV(WDP1) | _BV(WDP2); // 2048ms
+            WDTCR = _BV(WDIE) | _BV(WDP1) | _BV(WDP0) | _BV(WDP2); // 2048ms
             break;
     }
     sei();

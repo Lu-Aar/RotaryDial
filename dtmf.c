@@ -90,8 +90,8 @@ volatile uint16_t _g_current_sine_value_low;  // position freq. B in LUT (extend
 
 void dtmf_init(void)
 {
-    _g_stepwidth_high = 0x00;
-    _g_stepwidth_low  = 0x00;
+    _g_stepwidth_high = 0;
+    _g_stepwidth_low  = 0;
 
     _g_current_sine_value_high = 0;
     _g_current_sine_value_low  = 0;
@@ -206,6 +206,7 @@ ISR(TIMER0_OVF_vect)
     }
 
     // calculate PWM value: high frequency value + 3/4 low frequency value
-    OCR0A = (sine_high + (sine_low - (sine_low >> 2)));
+    uint8_t duty_cycle = (sine_high + (sine_low - (sine_low >> 2)));
+    set_pwm_duty_cycle(duty_cycle);
     _g_delay_counter++;
 }

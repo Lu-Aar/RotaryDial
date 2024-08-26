@@ -26,6 +26,8 @@ void init();
 void set_port_b_pull_up(uint8_t pin); // the pin to put the pull up on
 void pwm_init(uint8_t pwm_pin);
 
+void set_pwm_duty_cycle(uint8_t duty_cycle);
+
 // write and read from eeprom
 void read_from_eeprom(int8_t* data, int* eeprom_address, uint8 size);
 void write_to_eeprom(int8_t* data, int* data_location, uint8 size);
