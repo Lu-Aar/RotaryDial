@@ -111,6 +111,12 @@ void start_sleep(void)
     sleep_disable();     // wake up here
 }
 
+void power_down(void)
+{
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    sleep_mode();
+}
+
 // Enable PWM output by configuring compare match mode - non inverting PWM
 void enable_pwm(void)
 {

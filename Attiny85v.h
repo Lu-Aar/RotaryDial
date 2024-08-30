@@ -40,6 +40,7 @@ void wdt_stop(void);
 
 // go to sleep till an interrupt triggers
 void start_sleep(void);
+void power_down(void);
 
 // enable or disable the pwm
 void enable_pwm(void);

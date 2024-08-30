@@ -204,8 +204,7 @@ int main(void)
         else
         {
             // Don't need timer - sleep to power down mode
-            set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-            sleep_mode();
+            power_down();
         }
     }
 
@@ -214,86 +213,97 @@ int main(void)
 
 static void process_dialed_digit(runstate_t* rs)
 {
-    if (rs->state == STATE_DIAL)
+    switch (rs->state)
     {
-        // Standard (no speed dial, no special function) mode
-        // Generate DTMF code
-        dtmf_generate_tone(rs->dialed_digit, DTMF_DURATION_MS);
+        case STATE_DIAL:
+        {
+            // Standard (no speed dial, no special function) mode
+            // Generate DTMF code
+            dtmf_generate_tone(rs->dialed_digit, DTMF_DURATION_MS);
 
-        if (rs->speed_dial_digit_index < SPEED_DIAL_SIZE)
-        {
-            // During regular dial always save into the 'Redial' position of the speed dial memory
-            rs->speed_dial_digits[rs->speed_dial_digit_index] = rs->dialed_digit;
-            rs->speed_dial_digit_index++;
+            if (rs->speed_dial_digit_index < SPEED_DIAL_SIZE)
+            {
+                // During regular dial always save into the 'Redial' position of the speed dial memory
+                rs->speed_dial_digits[rs->speed_dial_digit_index] = rs->dialed_digit;
+                rs->speed_dial_digit_index++;
 
-            write_current_speed_dial(rs->speed_dial_digits, SPEED_DIAL_REDIAL);
+                write_current_speed_dial(rs->speed_dial_digits, SPEED_DIAL_REDIAL);
+            }
+            break;
         }
-    }
-    else if (rs->state == STATE_SPECIAL_L1)
-    {
-        if (rs->dialed_digit == L2_STAR)
+        case STATE_SPECIAL_L1:
         {
-            // SF 1-*
-            dtmf_generate_tone(DIGIT_STAR, DTMF_DURATION_MS);
-            rs->state = STATE_DIAL;
+            if (rs->dialed_digit == L2_STAR)
+            {
+                // SF 1-*
+                dtmf_generate_tone(DIGIT_STAR, DTMF_DURATION_MS);
+                rs->state = STATE_DIAL;
+            }
+            else if (rs->dialed_digit == L2_POUND)
+            {
+                // SF 2-#
+                dtmf_generate_tone(DIGIT_POUND, DTMF_DURATION_MS);
+                rs->state = STATE_DIAL;
+            }
+            else if (rs->dialed_digit == L2_REDIAL)
+            {
+                // SF 3 (Redial)
+                dial_speed_dial_number(rs->speed_dial_digits, SPEED_DIAL_REDIAL);
+            }
+            else if (_g_speed_dial_loc[rs->dialed_digit] >= 0)
+            {
+                // Call speed dial number
+                dial_speed_dial_number(rs->speed_dial_digits, _g_speed_dial_loc[rs->dialed_digit]);
+            }
+            break;
         }
-        else if (rs->dialed_digit == L2_POUND)
+        case STATE_SPECIAL_L2:
         {
-            // SF 2-#
-            dtmf_generate_tone(DIGIT_POUND, DTMF_DURATION_MS);
-            rs->state = STATE_DIAL;
-        }
-        else if (rs->dialed_digit == L2_REDIAL)
-        {
-            // SF 3 (Redial)
-            dial_speed_dial_number(rs->speed_dial_digits, SPEED_DIAL_REDIAL);
-        }
-        else if (_g_speed_dial_loc[rs->dialed_digit] >= 0)
-        {
-            // Call speed dial number
-            dial_speed_dial_number(rs->speed_dial_digits, _g_speed_dial_loc[rs->dialed_digit]);
-        }
-    }
-    else if (rs->state == STATE_SPECIAL_L2)
-    {
-        if (_g_speed_dial_loc[rs->dialed_digit] >= 0)
-        {
-            rs->speed_dial_index       = _g_speed_dial_loc[rs->dialed_digit];
-            rs->speed_dial_digit_index = 0;
+            if (_g_speed_dial_loc[rs->dialed_digit] >= 0)
+            {
+                rs->speed_dial_index       = _g_speed_dial_loc[rs->dialed_digit];
+                rs->speed_dial_digit_index = 0;
 
-            for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
-                rs->speed_dial_digits[i] = DIGIT_OFF;
+                for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
+                    rs->speed_dial_digits[i] = DIGIT_OFF;
 
-            rs->state = STATE_PROGRAM_SD;
+                rs->state = STATE_PROGRAM_SD;
+            }
+            else
+            {
+                // Not a speed dial position. Revert back to ordinary dial
+                rs->state = STATE_DIAL;
+            }
+            break;
         }
-        else
+        case STATE_PROGRAM_SD:
         {
-            // Not a speed dial position. Revert back to ordinary dial
-            rs->state = STATE_DIAL;
-        }
-    }
-    else if (rs->state == STATE_PROGRAM_SD)
-    {
-        // Do we have too many digits entered?
-        if (rs->speed_dial_digit_index >= SPEED_DIAL_SIZE)
-        {
-            // Exit speed dial mode
-            rs->state = STATE_DIAL;
-            // Beep to indicate that we done
-            dtmf_generate_tone(DIGIT_TUNE_DESC, 800);
-        }
-        else
-        {
-            // Next digit
-            rs->speed_dial_digits[rs->speed_dial_digit_index] = rs->dialed_digit;
-            rs->speed_dial_digit_index++;
+            // Do we have too many digits entered?
+            if (rs->speed_dial_digit_index >= SPEED_DIAL_SIZE)
+            {
+                // Exit speed dial mode
+                rs->state = STATE_DIAL;
+                // Beep to indicate that we done
+                dtmf_generate_tone(DIGIT_TUNE_DESC, 800);
+            }
+            else
+            {
+                // Next digit
+                rs->speed_dial_digits[rs->speed_dial_digit_index] = rs->dialed_digit;
+                rs->speed_dial_digit_index++;
 
-            // Generic beep - do not gererate DTMF code
-            dtmf_generate_tone(DIGIT_BEEP_LOW, DTMF_DURATION_MS);
-        }
+                // Generic beep - do not gererate DTMF code
+                dtmf_generate_tone(DIGIT_BEEP_LOW, DTMF_DURATION_MS);
+            }
 
-        // Write SD on every digit so user can hang up to save
-        write_current_speed_dial(rs->speed_dial_digits, rs->speed_dial_index);
+            // Write SD on every digit so user can hang up to save
+            write_current_speed_dial(rs->speed_dial_digits, rs->speed_dial_index);
+            break;
+        }
+        default:
+        {
+            break;
+        }
     }
 }
 
