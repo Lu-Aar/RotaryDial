@@ -42,33 +42,42 @@
 #define F_DETECT_SPECIAL_L2 0x02
 #define F_WDT_AWAKE         0x04
 
-#define SPEED_DIAL_COUNT  8 // 8 Positions in total (Redail(3),4,5,6,7,8,9,0)
-#define SPEED_DIAL_REDIAL (SPEED_DIAL_COUNT - 1)
+#define SPEED_DIAL_COUNT  9                      // 9 Positions in total (Redail(3),4,5,6,7,8,9,0, normal dial)
+#define SPEED_DIAL_REDIAL (SPEED_DIAL_COUNT - 2) // Redial is always the second last position
+#define NORMAL_DIAL       (SPEED_DIAL_COUNT - 1) // Normal dial is always the last position
 
 #define L2_STAR   1
 #define L2_POUND  2
 #define L2_REDIAL 3
 
+#define DAIL_TIMEOUT_MS 1000 // Timeout for dialed digit in ms
+
 typedef struct
 {
-    uint8_t state;
-    uint8_t flags;
-    bool    dial_pin_state;
-    uint8_t speed_dial_index;
-    uint8_t speed_dial_digit_index;
-    int8_t  speed_dial_digits[SPEED_DIAL_SIZE];
-    int8_t  dialed_digit;
+    uint8_t  state;
+    uint8_t  flags;
+    bool     dial_pin_state;
+    uint8_t  speed_dial_index;
+    uint8_t  speed_dial_digit_index;
+    int8_t   speed_dial_digits[SPEED_DIAL_SIZE];
+    int8_t   dialed_digit;
+    uint16_t dial_timeout_counter;
+    bool     dial_timeout_active;
+    bool     call_in_progress; // Flag to indicate if a call is in progress
 } runstate_t;
 
 static void process_dialed_digit(runstate_t* rs);
 static void dial_speed_dial_number(int8_t* speed_dial_digits, int8_t index);
 static void write_current_speed_dial(int8_t* speed_dial_digits, int8_t index);
+static void dial_number(int8_t* dial_digits);
 
 // Map speed dial numbers to memory locations
 const int8_t _g_speed_dial_loc[] = { 0, -1 /* 1 - * */, -1 /* 2 - # */, -1 /* 3 - Redial */, 1, 2, 3, 4, 5, 6 };
 
 int8_t EEMEM _g_speed_dial_eeprom[SPEED_DIAL_COUNT][SPEED_DIAL_SIZE] = { [0 ...(SPEED_DIAL_COUNT - 1)][0 ... SPEED_DIAL_SIZE - 1] = DIGIT_OFF };
 runstate_t   _g_run_state;
+
+static uint8_t _g_normal_dial_index = 0; // Index for normal dial
 
 int main(void)
 {
@@ -99,6 +108,9 @@ int main(void)
 
     for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
         rs->speed_dial_digits[i] = DIGIT_OFF;
+
+    _g_normal_dial_index    = 0;
+    rs->dial_timeout_active = false;
 
     while (1)
     {
@@ -145,6 +157,12 @@ int main(void)
                     wdt_stop();
 
                     process_dialed_digit(rs);
+                    if (!rs->call_in_progress)
+                    {
+                        rs->dial_timeout_counter = 0;
+                        rs->dial_timeout_active  = true;
+                        _g_normal_dial_index     = 0;
+                    }
                 }
             }
         }
@@ -199,10 +217,17 @@ int main(void)
                 dtmf_generate_tone(DIGIT_TUNE_ASC, 200);
             }
         }
-        else
+        // else
+        // {
+        //     // Don't need timer - sleep to power down mode
+        //     power_down();
+        // }
+        else if (rs->dial_timeout_counter >= DAIL_TIMEOUT_MS)
         {
-            // Don't need timer - sleep to power down mode
-            power_down();
+            dial_speed_dial_number(rs->speed_dial_digits, NORMAL_DIAL);
+            rs->dial_timeout_counter = 0;
+            rs->dial_timeout_active  = false;
+            _g_normal_dial_index     = 0;
         }
     }
 
@@ -217,7 +242,14 @@ static void process_dialed_digit(runstate_t* rs)
         {
             // Standard (no speed dial, no special function) mode
             // Generate DTMF code
-            dtmf_generate_tone(rs->dialed_digit, DTMF_DURATION_MS);
+            if (!rs->call_in_progress)
+            {
+                add_number_to_dial(rs->dialed_digit);
+            }
+            else
+            {
+                dtmf_generate_tone(rs->dialed_digit, DTMF_DURATION_MS);
+            }
 
             if (rs->speed_dial_digit_index < SPEED_DIAL_SIZE)
             {
@@ -234,13 +266,28 @@ static void process_dialed_digit(runstate_t* rs)
             if (rs->dialed_digit == L2_STAR)
             {
                 // SF 1-*
-                dtmf_generate_tone(DIGIT_STAR, DTMF_DURATION_MS);
+
+                if (!rs->call_in_progress)
+                {
+                    add_number_to_dial(DIGIT_STAR);
+                }
+                else
+                {
+                    dtmf_generate_tone(DIGIT_STAR, DTMF_DURATION_MS);
+                }
                 rs->state = STATE_DIAL;
             }
             else if (rs->dialed_digit == L2_POUND)
             {
                 // SF 2-#
-                dtmf_generate_tone(DIGIT_POUND, DTMF_DURATION_MS);
+                if (!rs->call_in_progress)
+                {
+                    add_number_to_dial(DIGIT_POUND);
+                }
+                else
+                {
+                    dtmf_generate_tone(DIGIT_POUND, DTMF_DURATION_MS);
+                }
                 rs->state = STATE_DIAL;
             }
             else if (rs->dialed_digit == L2_REDIAL)
@@ -312,18 +359,40 @@ static void dial_speed_dial_number(int8_t* speed_dial_digits, int8_t index)
     {
         read_from_eeprom(speed_dial_digits, &_g_speed_dial_eeprom[index][0], SPEED_DIAL_SIZE);
 
-        for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
+        // for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
+        // {
+        //     // Dial the number
+        //     // Skip dialing invalid digits
+        //     if (speed_dial_digits[i] >= 0 && speed_dial_digits[i] <= DIGIT_POUND)
+        //     {
+        //         dtmf_generate_tone(speed_dial_digits[i], DTMF_DURATION_MS);
+        //         // Pause between DTMF tones
+        //         sleep_ms(DTMF_DURATION_MS);
+        //     }
+        // }
+        dial_number(speed_dial_digits);
+    }
+}
+
+static void dial_number(int8_t* dial_digits)
+{
+    for (uint8_t i = 0; i < SPEED_DIAL_SIZE; i++)
+    {
+        // Dial the number
+        // Skip dialing invalid digits
+        if (dial_digits[i] >= 0 && dial_digits[i] <= DIGIT_POUND)
         {
-            // Dial the number
-            // Skip dialing invalid digits
-            if (speed_dial_digits[i] >= 0 && speed_dial_digits[i] <= DIGIT_POUND)
-            {
-                dtmf_generate_tone(speed_dial_digits[i], DTMF_DURATION_MS);
-                // Pause between DTMF tones
-                sleep_ms(DTMF_DURATION_MS);
-            }
+            dtmf_generate_tone(dial_digits[i], DTMF_DURATION_MS);
+            // Pause between DTMF tones
+            sleep_ms(DTMF_DURATION_MS);
         }
     }
+}
+
+void add_number_to_dial(int8_t digit)
+{
+    write_to_eeprom(&digit, &_g_speed_dial_eeprom[8][_g_normal_dial_index], 1);
+    _g_normal_dial_index++;
 }
 
 static void write_current_speed_dial(int8_t* speed_dial_digits, int8_t index)
@@ -359,4 +428,15 @@ ISR(BADISR_vect)
 ISR(WDT_vect)
 {
     _g_run_state.flags |= F_WDT_AWAKE;
+}
+
+volatile uint16_t t0_ovf_count = 0;
+ISR(TIMER0_OVF_vect)
+{
+    t0_ovf_count++;
+    if (t0_ovf_count >= 16)
+    { // 16 * 64μs = 1.024ms (close to 1ms)
+        t0_ovf_count = 0;
+        _g_run_state.dial_timeout_counter++; // if you want to count ms here
+    }
 }
