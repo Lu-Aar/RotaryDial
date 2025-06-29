@@ -29,11 +29,7 @@
 
 #include "dtmf.h"
 
-#define TIMER_CLK_DIV1       0x01 ///< Timer clocked at F_CPU
-#define TIMER_PRESCALE_MASK0 0x07 ///< Timer Prescaler Bit-Mask
-#define NUM_SAMPLES          128  // Number of samples in lookup table
-
-static void enable_pwm(void);
+#define NUM_SAMPLES 128 // Number of samples in lookup table
 
 //************************** SIN TABLE *************************************
 // Samples table : one period sampled on 128 samples and
@@ -82,7 +78,6 @@ const uint8_t auc_frequency[12][2] = {
     { 96, 61 }, // #
 };
 
-volatile uint32_t _g_delay_counter;           // Delay counter for sleep function
 volatile uint8_t  _g_stepwidth_high;          // step width of high frequency
 volatile uint8_t  _g_stepwidth_low;           // step width of low frequency
 volatile uint16_t _g_current_sine_value_high; // position freq. A in LUT (extended format)
@@ -96,13 +91,13 @@ void dtmf_init(void)
     _g_current_sine_value_high = 0;
     _g_current_sine_value_low  = 0;
 
-    _g_delay_counter = 0;
+    reset_delay_counter();
 }
 
 // Generate DTMF tone, duration x ms
 void dtmf_generate_tone(int8_t digit, uint16_t duration_ms)
 {
-    disable_interrupts();
+    disable_pin_change_interrupts();
 
     switch (digit)
     {
@@ -168,7 +163,7 @@ void dtmf_generate_tone(int8_t digit, uint16_t duration_ms)
     }
 
     // Stop DTMF transmitting
-    disable_pwm();
+    disable_pwm(PIN_PWM_OUT);
     _g_stepwidth_high = 0;
     _g_stepwidth_low  = 0;
 
@@ -208,5 +203,5 @@ ISR(TIMER0_OVF_vect)
     // calculate PWM value: high frequency value + 3/4 low frequency value
     uint8_t duty_cycle = (sine_high + (sine_low - (sine_low >> 2)));
     set_pwm_duty_cycle(duty_cycle);
-    _g_delay_counter++;
+    increase_delay_counter();
 }

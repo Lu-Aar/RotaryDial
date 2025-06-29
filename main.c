@@ -30,10 +30,6 @@
 #include "Attiny85v.h"
 #include "dtmf.h"
 
-#define PIN_PWM_OUT PB0 // PB0 (OC0A) as PWM output
-#define PIN_DIAL    PB1
-#define PIN_PULSE   PB2
-
 #define SPEED_DIAL_SIZE 32
 
 #define STATE_DIAL       0x00
@@ -79,7 +75,9 @@ int main(void)
     runstate_t* rs = &_g_run_state;
     bool        dial_pin_prev_state;
 
-    init();
+    init(PIN_DIAL, PIN_PULSE);
+    enable_interrupts();
+
     set_port_b_pull_up(PIN_DIAL);
     set_port_b_pull_up(PIN_PULSE);
 
