@@ -222,7 +222,7 @@ int main(void)
         //     // Don't need timer - sleep to power down mode
         //     power_down();
         // }
-        else if (rs->dial_timeout_counter >= DAIL_TIMEOUT_MS)
+        else if ((rs->dial_timeout_counter >= DAIL_TIMEOUT_MS) && rs->dial_timeout_active)
         {
             dial_speed_dial_number(rs->speed_dial_digits, NORMAL_DIAL);
             rs->dial_timeout_counter = 0;

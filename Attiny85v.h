@@ -71,6 +71,4 @@ void disable_pin_change_interrupts(void);
 void reset_delay_counter(void);
 void increase_delay_counter(void);
 
-uint64_t get_systick_ms(void); // Get the current system tick in milliseconds
-
 #endif /* ATTINY85V_H */
